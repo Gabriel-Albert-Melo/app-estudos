@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Estudos</title>
+<meta name="theme-color" content="#0f172a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Estudos">
+<style>
+:root{--bg:#f4f6fb;--card:#fff;--tx:#0f172a;--mu:#64748b;--bd:#e2e8f0;--ac:#4f46e5;--ac2:#eef2ff;--ok:#16a34a;--dg:#dc2626;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0b1020;--card:#151b2e;--tx:#e8ecf7;--mu:#8b97b5;--bd:#232c47;--ac:#818cf8;--ac2:#1d2444;--ok:#4ade80;--dg:#f87171}}
+:root[data-theme="dark"]{--bg:#0b1020;--card:#151b2e;--tx:#e8ecf7;--mu:#8b97b5;--bd:#232c47;--ac:#818cf8;--ac2:#1d2444;--ok:#4ade80;--dg:#f87171}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-tap-highlight-color:transparent}
+main{max-width:640px;margin:0 auto;padding:16px 14px 96px}
+h1{font-size:20px;margin:4px 0 14px}h2{font-size:13px;color:var(--mu);text-transform:uppercase;letter-spacing:.06em;margin:18px 0 8px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:16px;padding:14px;margin-bottom:10px}
+.row{display:flex;gap:8px;align-items:center}.row>*{min-width:0}.sp{justify-content:space-between}.grow{flex:1}
+.mu{color:var(--mu);font-size:13px}.big{font-size:28px;font-weight:700}
+input,select{width:100%;padding:11px 12px;border:1px solid var(--bd);border-radius:12px;background:var(--bg);color:var(--tx);font:inherit;margin-bottom:8px}
+button{font:inherit;border:0;border-radius:12px;padding:11px 14px;background:var(--ac);color:#fff;font-weight:600;cursor:pointer}
+button.sec{background:var(--ac2);color:var(--ac)}button.dg{background:transparent;color:var(--dg);padding:6px 8px}button.full{width:100%}
+.seg{display:flex;background:var(--ac2);border-radius:12px;padding:3px;margin-bottom:10px}
+.seg button{flex:1;background:transparent;color:var(--mu);padding:8px}.seg button.on{background:var(--card);color:var(--ac);box-shadow:0 1px 3px #0002}
+.bar{height:8px;background:var(--ac2);border-radius:99px;overflow:hidden;margin-top:6px}.bar i{display:block;height:100%;border-radius:99px}
+.clock{font-size:56px;font-weight:700;text-align:center;font-variant-numeric:tabular-nums;margin:10px 0 14px}
+.dot{width:10px;height:10px;border-radius:50%;flex:none}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.grid .card{margin:0}
+nav{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--bd);display:flex;padding-bottom:env(safe-area-inset-bottom,0px);z-index:5}
+nav button{flex:1;background:transparent;color:var(--mu);border-radius:0;padding:10px 2px;font-size:11px;font-weight:600}
+nav button.on{color:var(--ac)}nav span{display:block;font-size:20px}
+.done{text-decoration:line-through;opacity:.5}.empty{text-align:center;color:var(--mu);padding:18px 0}
+</style>
+</head>
+<body>
+<main id="app"></main>
+<script>
+'use strict';
+/* ===== Configuração e estado ===== */
+const KEY = 'estudos.v1';
+const COLORS = ['#4f46e5','#0891b2','#16a34a','#d97706','#dc2626','#c026d3','#64748b'];
+const TABS = [['painel','📊','Painel'],['foco','⏱️','Foco'],['agenda','📅','Agenda'],['materias','🎓','Matérias'],['livros','📚','Livros']];
+const DEFAULT = { subjects: [], books: [], agenda: [], sessions: [], timer: null, ui: { tab: 'painel', period: 'day', mode: 'study', refId: '', finishing: false } };
+
+const Store = {
+  load() {
+    try { return { ...DEFAULT, ...JSON.parse(localStorage.getItem(KEY) || '{}') }; }
+    catch (e) { console.warn('[Store] leitura falhou', e); return structuredClone(DEFAULT); }
+  },
+  save() {
+    try { localStorage.setItem(KEY, JSON.stringify(S)); }
+    catch (e) { console.error('[Store] gravação falhou', e); }
+  }
+};
+let S = Store.load();
+S.ui = { ...DEFAULT.ui, ...S.ui, finishing: false };
+
+/* ===== Utilitários ===== */
+const $ = s => document.querySelector(s);
+const uid = () => Math.random().toString(36).slice(2, 9);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+const today = () => { const d = new Date(); return new Date(d - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10); };
+const hm = sec => { const m = Math.round(sec / 60); return m >= 60 ? `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}min` : `${m}min`; };
+const clock = sec => { sec = Math.floor(sec); const p = n => String(n).padStart(2, '0'); return `${p(Math.floor(sec / 3600))}:${p(Math.floor(sec % 3600 / 60))}:${p(sec % 60)}`; };
+const subj = id => S.subjects.find(x => x.id === id);
+const book = id => S.books.find(x => x.id === id);
+const periodStart = p => {
+  const d = new Date(); d.setHours(0, 0, 0, 0);
+  if (p === 'week') d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  if (p === 'month') d.setDate(1);
+  return d.getTime();
+};
+const elapsed = () => !S.timer ? 0 : S.timer.acc + (S.timer.startedAt ? (Date.now() - S.timer.startedAt) / 1000 : 0);
+const commit = () => { Store.save(); render(); };
+
+/* ===== Views ===== */
+const Views = {
+  painel() {
+    const from = periodStart(S.ui.period);
+    const ss = S.sessions.filter(s => s.ts >= from);
+    const study = ss.filter(s => s.type === 'study'), read = ss.filter(s => s.type === 'read');
+    const tot = a => a.reduce((n, s) => n + s.sec, 0);
+    const by = {}; study.forEach(s => by[s.refId] = (by[s.refId] || 0) + s.sec);
+    const rows = Object.entries(by).sort((a, b) => b[1] - a[1]);
+    const max = rows[0]?.[1] || 1;
+    const pages = read.reduce((n, s) => n + (s.pages || 0), 0), rsec = tot(read);
+    const days = Math.max(1, Math.ceil((Date.now() - from) / 864e5));
+    return `<h1>Painel</h1>
+    <div class="seg">${[['day','Dia'],['week','Semana'],['month','Mês']].map(([k, l]) => `<button data-act="period" data-v="${k}" class="${S.ui.period === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+    <h2>Estudo</h2>
+    <div class="card"><div class="mu">Total estudado</div><div class="big">${hm(tot(study))}</div></div>
+    <div class="card">${rows.length ? rows.map(([id, sec]) => { const s = subj(id); return `<div style="margin-bottom:10px"><div class="row sp"><span class="row"><i class="dot" style="background:${s?.color || '#64748b'}"></i>${esc(s?.name || 'Matéria removida')}</span><b>${hm(sec)}</b></div><div class="bar"><i style="width:${sec / max * 100}%;background:${s?.color || '#64748b'}"></i></div></div>`; }).join('') : '<div class="empty">Nenhuma sessão de estudo neste período.</div>'}</div>
+    <h2>Leitura</h2>
+    <div class="grid">
+      <div class="card"><div class="mu">Tempo lendo</div><div class="big">${hm(rsec)}</div></div>
+      <div class="card"><div class="mu">Páginas lidas</div><div class="big">${pages}</div></div>
+      <div class="card"><div class="mu">Páginas / hora</div><div class="big">${rsec > 60 ? (pages / (rsec / 3600)).toFixed(1) : '—'}</div></div>
+      <div class="card"><div class="mu">Páginas / dia</div><div class="big">${(pages / days).toFixed(1)}</div></div>
+    </div>`;
+  },
+
+  foco() {
+    const t = S.timer, mode = t ? t.mode : S.ui.mode;
+    const list = mode === 'study' ? S.subjects : S.books;
+    const refId = t ? t.refId : S.ui.refId;
+    const sel = list.find(x => x.id === refId);
+    const name = x => esc(mode === 'study' ? x.name : x.title);
+    if (S.ui.finishing && t) {
+      const b = book(t.refId);
+      return `<h1>Finalizar leitura</h1><div class="card"><p>Você leu por <b>${hm(elapsed())}</b> em <b>${esc(b?.title || 'livro')}</b>.</p>
+      <form data-form="finish-read"><input name="pages" type="number" min="0" inputmode="numeric" placeholder="Quantas páginas você leu?" required autofocus>
+      <button class="full">Salvar sessão</button></form><button class="sec full" data-act="back-timer" style="margin-top:8px">Voltar ao cronômetro</button></div>`;
+    }
+    return `<h1>Foco</h1>
+    <div class="seg">${[['study','Estudo'],['read','Leitura']].map(([k, l]) => `<button data-act="mode" data-v="${k}" ${t ? 'disabled' : ''} class="${mode === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+    <div class="card">
+      ${list.length ? `<select data-change="ref" ${t ? 'disabled' : ''}><option value="">Escolha ${mode === 'study' ? 'a matéria' : 'o livro'}…</option>${list.map(x => `<option value="${x.id}" ${x.id === refId ? 'selected' : ''}>${name(x)}</option>`).join('')}</select>` : `<div class="empty">Cadastre ${mode === 'study' ? 'uma matéria em “Matérias”' : 'um livro em “Livros”'} para começar.</div>`}
+      <div class="clock" id="clock">${clock(elapsed())}</div>
+      ${!t ? `<button class="full" data-act="start" ${sel ? '' : 'disabled'}>▶ Iniciar</button>` :
+        `<div class="row">${t.startedAt ? '<button class="sec grow" data-act="pause">⏸ Pausar</button>' : '<button class="sec grow" data-act="resume">▶ Retomar</button>'}<button class="grow" data-act="finish">⏹ Finalizar</button></div><button class="dg full" data-act="discard">Descartar sessão</button>`}
+    </div>`;
+  },
+
+  agenda() {
+    const items = [...S.agenda].sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
+    const groups = {}; items.forEach(i => (groups[i.date] = groups[i.date] || []).push(i));
+    return `<h1>Agenda</h1>
+    <form class="card" data-form="agenda"><input name="title" placeholder="O que estudar? (ex.: Capítulo 3)" required>
+      <div class="row"><input name="date" type="date" value="${today()}" required><input name="time" type="time"></div>
+      <select name="subjectId"><option value="">Sem matéria</option>${S.subjects.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('')}</select><button class="full">Adicionar</button></form>
+    ${Object.keys(groups).length ? Object.entries(groups).map(([d, arr]) => `<h2>${d.split('-').reverse().join('/')}${d === today() ? ' · hoje' : ''}</h2>${arr.map(i => `<div class="card row"><input type="checkbox" style="width:22px;margin:0" data-act="toggle-agenda" data-id="${i.id}" ${i.done ? 'checked' : ''}><div class="grow ${i.done ? 'done' : ''}"><div>${esc(i.title)}</div><div class="mu">${esc(i.time || 'Dia todo')} ${subj(i.subjectId) ? '· ' + esc(subj(i.subjectId).name) : ''}</div></div><button class="dg" data-act="del-agenda" data-id="${i.id}">✕</button></div>`).join('')}`).join('') : '<div class="empty">Agenda vazia.</div>'}`;
+  },
+
+  materias() {
+    return `<h1>Matérias</h1>
+    <form class="card" data-form="subject"><input name="name" placeholder="Nova matéria (ex.: Python, Inglês)" required><button class="full">Adicionar matéria</button></form>
+    ${S.subjects.length ? S.subjects.map(s => { const sec = S.sessions.filter(x => x.type === 'study' && x.refId === s.id).reduce((n, x) => n + x.sec, 0); return `<div class="card row"><i class="dot" style="background:${s.color}"></i><div class="grow"><b>${esc(s.name)}</b><div class="mu">${hm(sec)} no total</div></div><button class="dg" data-act="del-subject" data-id="${s.id}">✕</button></div>`; }).join('') : '<div class="empty">Nenhuma matéria cadastrada.</div>'}
+    <h2>Backup</h2><div class="card"><div class="mu" style="margin-bottom:8px">Os dados ficam só neste aparelho. Copie o backup de vez em quando.</div>
+    <div class="row"><button class="sec grow" data-act="export">Copiar backup</button><button class="sec grow" data-act="import">Restaurar</button></div></div>`;
+  },
+
+  livros() {
+    return `<h1>Livros</h1>
+    <form class="card" data-form="book"><input name="title" placeholder="Título" required><input name="author" placeholder="Autor (opcional)">
+      <input name="pages" type="number" min="1" inputmode="numeric" placeholder="Total de páginas" required><button class="full">Adicionar livro</button></form>
+    ${S.books.length ? S.books.map(b => { const pr = Math.min(100, b.pagesRead / b.pages * 100); return `<div class="card"><div class="row sp"><div><b>${esc(b.title)}</b><div class="mu">${esc(b.author || '')}</div></div><button class="dg" data-act="del-book" data-id="${b.id}">✕</button></div>
+      <div class="row sp mu" style="margin-top:6px"><span>${b.pagesRead}/${b.pages} págs</span><span>${pr.toFixed(0)}%</span></div><div class="bar"><i style="width:${pr}%;background:var(--ok)"></i></div>
+      <button class="sec full" style="margin-top:10px" data-act="read-book" data-id="${b.id}">${b.pagesRead >= b.pages ? '✓ Concluído' : '📖 Ler agora'}</button></div>`; }).join('') : '<div class="empty">Nenhum livro cadastrado.</div>'}`;
+  }
+};
+
+/* ===== Render ===== */
+function render() {
+  $('#app').innerHTML = Views[S.ui.tab]() +
+    `<nav>${TABS.map(([k, i, l]) => `<button data-act="tab" data-v="${k}" class="${S.ui.tab === k ? 'on' : ''}"><span>${i}</span>${l}</button>`).join('')}</nav>`;
+}
+
+/* ===== Ações ===== */
+const Actions = {
+  tab: v => { S.ui.tab = v; },
+  period: v => { S.ui.period = v; },
+  mode: v => { S.ui.mode = v; S.ui.refId = ''; },
+  start: () => { if (S.ui.refId) S.timer = { mode: S.ui.mode, refId: S.ui.refId, acc: 0, startedAt: Date.now() }; },
+  pause: () => { S.timer.acc = elapsed(); S.timer.startedAt = null; },
+  resume: () => { S.timer.startedAt = Date.now(); },
+  discard: () => { if (confirm('Descartar esta sessão?')) { S.timer = null; S.ui.finishing = false; } },
+  'back-timer': () => { S.ui.finishing = false; },
+  finish() {
+    const t = S.timer; t.acc = elapsed(); t.startedAt = null;
+    if (t.mode === 'read') { S.ui.finishing = true; return; }
+    saveSession(0);
+  },
+  'read-book': id => { S.ui.tab = 'foco'; S.ui.mode = 'read'; S.ui.refId = id; },
+  'del-subject': id => { if (confirm('Remover matéria? O histórico será mantido.')) S.subjects = S.subjects.filter(x => x.id !== id); },
+  'del-book': id => { if (confirm('Remover livro?')) S.books = S.books.filter(x => x.id !== id); },
+  'del-agenda': id => { S.agenda = S.agenda.filter(x => x.id !== id); },
+  'toggle-agenda': id => { const i = S.agenda.find(x => x.id === id); if (i) i.done = !i.done; },
+  async export() {
+    try { await navigator.clipboard.writeText(JSON.stringify(S)); alert('Backup copiado. Cole em um local seguro (ex.: Notas).'); }
+    catch { prompt('Copie o backup:', JSON.stringify(S)); }
+  },
+  import() {
+    const raw = prompt('Cole o backup:'); if (!raw) return;
+    try { S = { ...DEFAULT, ...JSON.parse(raw) }; S.timer = null; } catch { alert('Backup inválido.'); }
+  }
+};
+
+function saveSession(pages) {
+  const t = S.timer;
+  if (t.acc >= 5) {
+    S.sessions.push({ id: uid(), type: t.mode, refId: t.refId, sec: Math.round(t.acc), pages, ts: Date.now() });
+    if (t.mode === 'read') { const b = book(t.refId); if (b) b.pagesRead += pages; }
+  }
+  S.timer = null; S.ui.finishing = false;
+}
+
+const Forms = {
+  subject: f => S.subjects.push({ id: uid(), name: f.name.trim(), color: COLORS[S.subjects.length % COLORS.length] }),
+  book: f => S.books.push({ id: uid(), title: f.title.trim(), author: f.author.trim(), pages: +f.pages, pagesRead: 0 }),
+  agenda: f => S.agenda.push({ id: uid(), title: f.title.trim(), date: f.date, time: f.time, subjectId: f.subjectId, done: false }),
+  'finish-read': f => saveSession(Math.max(0, parseInt(f.pages, 10) || 0))
+};
+
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-act]'); if (!el || el.disabled) return;
+  const fn = Actions[el.dataset.act]; if (!fn) return;
+  Promise.resolve(fn(el.dataset.v || el.dataset.id)).then(commit);
+});
+document.addEventListener('change', e => { if (e.target.dataset.change === 'ref') { S.ui.refId = e.target.value; commit(); } });
+document.addEventListener('submit', e => {
+  e.preventDefault();
+  const fn = Forms[e.target.dataset.form]; if (!fn) return;
+  try { fn(Object.fromEntries(new FormData(e.target))); commit(); } catch (err) { console.error('[Form]', err); }
+});
+setInterval(() => { const c = $('#clock'); if (c && S.timer) c.textContent = clock(elapsed()); }, 1000);
+
+/* ===== PWA: manifesto injetado (instalável via "Adicionar à tela inicial") ===== */
+try {
+  const icon = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="110" fill="#4f46e5"/><text x="256" y="350" font-size="300" text-anchor="middle">📚</text></svg>');
+  const man = { name: 'Estudos', short_name: 'Estudos', display: 'standalone', start_url: location.href, background_color: '#0f172a', theme_color: '#0f172a', icons: [{ src: icon, sizes: '512x512', type: 'image/svg+xml' }] };
+  const l = document.createElement('link'); l.rel = 'manifest';
+  l.href = URL.createObjectURL(new Blob([JSON.stringify(man)], { type: 'application/manifest+json' }));
+  document.head.appendChild(l);
+  const a = document.createElement('link'); a.rel = 'apple-touch-icon'; a.href = icon; document.head.appendChild(a);
+} catch (e) { console.warn('[PWA] manifesto não aplicado', e); }
+
+render();
+</script>
+</body>
+</html>
